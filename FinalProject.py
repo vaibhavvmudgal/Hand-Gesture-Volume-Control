@@ -1,11 +1,9 @@
-# FinalProject.py
 import cv2 as cv
 import numpy as np
 import HandModule as hm
 import math
 import os
 import streamlit as st
-import tempfile
 import time
 
 os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
@@ -58,6 +56,10 @@ def run_camera():
 
     while True:
         ret, video_data = video_cap.read()
+        if not ret:
+            st.error("Failed to read from camera.")
+            break
+
         video_data = detect.findHands(video_data)
         lmList = detect.findPosition(video_data, draw=False)
         if len(lmList) != 0:
