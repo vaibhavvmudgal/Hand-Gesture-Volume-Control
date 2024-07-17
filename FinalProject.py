@@ -26,7 +26,7 @@ def get_volume():
 
 def main():
     st.title("Hand Gesture Volume Control")
-    
+
     # Camera selection
     camera_options = ["Webcam"]
     camera = st.selectbox("Choose your camera:", camera_options)
@@ -95,7 +95,6 @@ def run_camera():
             break
 
     video_cap.release()
-    cv.destroyAllWindows()
 
 if __name__ == "__main__":
     main()
