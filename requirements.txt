@@ -10,7 +10,7 @@ youtube-transcript-api
 unstructured
 comtypes
 pycaw
-opencv-python
+opencv-python-headless
 tensorflow
 mediapipe
 sounddevice
