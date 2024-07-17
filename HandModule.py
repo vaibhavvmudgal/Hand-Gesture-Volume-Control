@@ -1,101 +1,38 @@
 import cv2 as cv
-import numpy as np
-import HandModule as hm
-import math
-import os
-import streamlit as st
-import time
+import mediapipe as mp
 
-os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
+class handDetector:
+    def __init__(self, mode=False, maxHands=2, detCon=0.5, trackCon=0.5):
+        self.mode = mode
+        self.maxHands = maxHands
+        self.detCon = detCon
+        self.trackCon = trackCon
+        self.mpHands = mp.solutions.hands
+        self.hands = self.mpHands.Hands(static_image_mode=self.mode, max_num_hands=self.maxHands, 
+                                        min_detection_confidence=self.detCon, min_tracking_confidence=self.trackCon)
+        self.mpDraw = mp.solutions.drawing_utils
 
-import absl.logging
-absl.logging.set_verbosity(absl.logging.INFO)
+    def findHands(self, video_data, draw=True):
+        videoRGB = cv.cvtColor(video_data, cv.COLOR_BGR2RGB)  # Convert to RGB
+        self.results = self.hands.process(videoRGB)
 
-import tensorflow as tf
-tf.get_logger().setLevel('ERROR')
+        if self.results.multi_hand_landmarks:
+            for handLms in self.results.multi_hand_landmarks:
+                if draw:
+                    self.mpDraw.draw_landmarks(video_data, handLms, self.mpHands.HAND_CONNECTIONS)
 
-def set_volume(volume_level):
-    """Set the system volume on macOS."""
-    osascript_command = f"osascript -e 'set volume output volume {volume_level}'"
-    os.system(osascript_command)
+        return video_data
 
-def get_volume():
-    """Get the system volume on macOS."""
-    osascript_command = "osascript -e 'output volume of (get volume settings)'"
-    return int(os.popen(osascript_command).read().strip())
+    def findPosition(self, video_data, handNo=0, draw=True):
+        lmList = []
 
-def main():
-    st.title("Hand Gesture Volume Control")
-    
-    # Camera selection
-    camera_options = ["Webcam"]
-    camera = st.selectbox("Choose your camera:", camera_options)
+        if self.results.multi_hand_landmarks:
+            myHand = self.results.multi_hand_landmarks[handNo]
+            for id, lm in enumerate(myHand.landmark):
+                h, w, c = video_data.shape
+                cx, cy = int(lm.x * w), int(lm.y * h)
+                lmList.append([id, cx, cy])
+                if draw:
+                    cv.circle(video_data, (cx, cy), 15, (255, 0, 255), cv.FILLED)
 
-    start_button = st.button("Start")
-
-    if start_button:
-        run_camera()
-
-def run_camera():
-    wCam, hCam = 640, 480
-    video_cap = cv.VideoCapture(0)
-    video_cap.set(3, wCam)
-    video_cap.set(4, hCam)
-
-    detect = hm.handDetector()
-
-    minVol = 0
-    maxVol = 100
-    volBar = 300
-    vol = 0
-
-    cTime = 0
-    pTime = 0
-
-    stframe = st.empty()
-
-    while True:
-        ret, video_data = video_cap.read()
-        if not ret:
-            st.error("Failed to read from camera.")
-            break
-
-        video_data = detect.findHands(video_data)
-        lmList = detect.findPosition(video_data, draw=False)
-        if len(lmList) != 0:
-            x1, y1 = lmList[4][1], lmList[4][2]
-            x2, y2 = lmList[8][1], lmList[8][2]
-            cx, cy = (x1 + x2) // 2, (y1 + y2) // 2
-
-            cv.circle(video_data, (x1, y1), 15, (255, 0, 255), cv.FILLED)
-            cv.circle(video_data, (x2, y2), 15, (255, 0, 255), cv.FILLED)
-            cv.line(video_data, (x1, y1), (x2, y2), (255, 0, 255), 3)
-
-            length = math.hypot(x2 - x1, y2 - y1)
-            vol = np.interp(length, [25, 200], [minVol, maxVol])
-            volBar = np.interp(length, [25, 200], [400, 150])
-            set_volume(vol)
-
-            if length <= 50:
-                cv.circle(video_data, (cx, cy), 15, (0, 255, 0), cv.FILLED)
-
-        cv.rectangle(video_data, (50, 150), (85, 400), (0, 255, 0), 3)
-        cv.rectangle(video_data, (50, int(volBar)), (85, 400), (0, 255, 0), cv.FILLED)
-
-        cTime = time.time()
-        fps = 1 / (cTime - pTime)
-        pTime = cTime
-
-        cv.putText(video_data, f'FPS: {int(fps)}', (50, 70), cv.FONT_HERSHEY_PLAIN, 3, (255, 0, 0), 4)
-        
-        # Display the frame in Streamlit
-        stframe.image(video_data, channels="BGR")
-
-        if cv.waitKey(1) == ord("a"):
-            break
-
-    video_cap.release()
-    cv.destroyAllWindows()
-
-if __name__ == "__main__":
-    main()
+        return lmList
