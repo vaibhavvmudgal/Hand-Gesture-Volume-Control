@@ -1,0 +1,16 @@
+langchain
+python-dotenv
+langchain_huggingface
+langchain_community
+streamlit
+validators
+langchain_groq
+pytube
+youtube-transcript-api
+unstructured
+comtypes
+pycaw
+opencv-python
+tensorflow
+mediapipe
+sounddevice
