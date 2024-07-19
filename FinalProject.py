@@ -20,7 +20,7 @@ def simulate_volume_control(length):
 def process_frame(frame, detector):
     """Process a single frame for hand gestures and simulate volume control."""
     if frame is None:
-        return frame
+        return frame, 50  # Return default volume if frame is None
 
     try:
         # Convert to RGB for hand detection
