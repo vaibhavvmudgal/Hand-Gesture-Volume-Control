@@ -5,7 +5,6 @@ import HandModule as hm
 import math
 import tempfile
 import os
-from PIL import Image
 
 # Define constants
 VIDEO_PATH = 'sample_video.mp4'  # Path to the pre-loaded video file
@@ -52,8 +51,8 @@ def main():
     st.title("Hand Gesture Volume Control")
 
     # Load video
-    st.write("Video:")
-    video_file = st.file_uploader("Upload a video file", type=["mp4", "mov"])
+    st.write("Upload a video file:")
+    video_file = st.file_uploader("Choose a video file", type=["mp4", "mov"])
 
     if video_file is not None:
         video_path = 'uploaded_video.mp4'
@@ -70,6 +69,9 @@ def main():
 
         stframe = st.empty()
 
+        # Unique key for the stop button to avoid DuplicateWidgetID error
+        stop_button = st.button('Stop', key='stop_button')
+
         while cap.isOpened():
             ret, frame = cap.read()
             if not ret:
@@ -81,7 +83,8 @@ def main():
             # Convert to PIL Image and display
             stframe.image(processed_frame, channels="BGR", use_column_width=True)
 
-            if st.button('Stop'):
+            # Check if the stop button was pressed
+            if stop_button:
                 break
 
         cap.release()
