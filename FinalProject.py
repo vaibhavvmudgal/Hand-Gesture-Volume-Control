@@ -6,6 +6,7 @@ import math
 import tempfile
 import os
 import threading
+from queue import Queue  # Import the Queue class
 
 # Function to process frames in a separate thread
 def process_frame_thread(frame_queue, result_queue, detector):
@@ -113,3 +114,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+    
