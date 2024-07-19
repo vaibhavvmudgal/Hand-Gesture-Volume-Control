@@ -1,83 +1,80 @@
-import streamlit as st
-from streamlit_webrtc import webrtc_streamer, VideoTransformerBase
 import cv2 as cv
-import mediapipe as mp
 import numpy as np
+import HandModule as hm
 import math
+import streamlit as st
+import time
 
-class handDetector:
-    def __init__(self, mode=False, maxHands=2, detCon=0.5, trackCon=0.5):
-        self.mode = mode
-        self.maxHands = maxHands
-        self.detCon = detCon
-        self.trackCon = trackCon
-        self.mpHands = mp.solutions.hands
-        self.hands = self.mpHands.Hands(static_image_mode=self.mode, max_num_hands=self.maxHands, 
-                                        min_detection_confidence=self.detCon, min_tracking_confidence=self.trackCon)
-        self.mpDraw = mp.solutions.drawing_utils
+def main():
+    st.title("Hand Gesture Volume Control")
 
-    def findHands(self, video_data, draw=True):
-        videoRGB = cv.cvtColor(video_data, cv.COLOR_BGR2RGB)  # Convert to RGB
-        self.results = self.hands.process(videoRGB)
+    # Camera selection
+    camera_options = ["Webcam"]
+    camera = st.selectbox("Choose your camera:", camera_options)
 
-        if self.results.multi_hand_landmarks:
-            for handLms in self.results.multi_hand_landmarks:
-                if draw:
-                    self.mpDraw.draw_landmarks(video_data, handLms, self.mpHands.HAND_CONNECTIONS)
+    start_button = st.button("Start")
 
-        return video_data
+    if start_button:
+        run_camera()
 
-    def findPosition(self, video_data, handNo=0, draw=True):
-        lmList = []
+def run_camera():
+    wCam, hCam = 640, 480
+    video_cap = cv.VideoCapture(0)
+    video_cap.set(3, wCam)
+    video_cap.set(4, hCam)
 
-        if self.results.multi_hand_landmarks:
-            myHand = self.results.multi_hand_landmarks[handNo]
-            for id, lm in enumerate(myHand.landmark):
-                h, w, c = video_data.shape
-                cx, cy = int(lm.x * w), int(lm.y * h)
-                lmList.append([id, cx, cy])
-                if draw:
-                    cv.circle(video_data, (cx, cy), 15, (255, 0, 255), cv.FILLED)
+    detect = hm.handDetector()
 
-        return lmList
+    minVol = 0
+    maxVol = 100
+    volBar = 300
+    vol = 0
 
-class VideoTransformer(VideoTransformerBase):
-    def __init__(self):
-        self.detector = handDetector()
-        self.minVol = 0
-        self.maxVol = 100
-        self.volBar = 300
+    cTime = 0
+    pTime = 0
 
-    def transform(self, frame):
-        img = frame.to_ndarray(format="bgr24")
+    stframe = st.empty()
 
-        img = self.detector.findHands(img)
-        lmList = self.detector.findPosition(img, draw=False)
+    while True:
+        ret, video_data = video_cap.read()
+        if not ret:
+            st.error("Failed to capture video.")
+            break
+
+        video_data = detect.findHands(video_data)
+        lmList = detect.findPosition(video_data, draw=False)
         if len(lmList) != 0:
             x1, y1 = lmList[4][1], lmList[4][2]
             x2, y2 = lmList[8][1], lmList[8][2]
             cx, cy = (x1 + x2) // 2, (y1 + y2) // 2
 
-            cv.circle(img, (x1, y1), 15, (255, 0, 255), cv.FILLED)
-            cv.circle(img, (x2, y2), 15, (255, 0, 255), cv.FILLED)
-            cv.line(img, (x1, y1), (x2, y2), (255, 0, 255), 3)
+            cv.circle(video_data, (x1, y1), 15, (255, 0, 255), cv.FILLED)
+            cv.circle(video_data, (x2, y2), 15, (255, 0, 255), cv.FILLED)
+            cv.line(video_data, (x1, y1), (x2, y2), (255, 0, 255), 3)
 
             length = math.hypot(x2 - x1, y2 - y1)
-            self.volBar = np.interp(length, [25, 200], [400, 150])
+            volBar = np.interp(length, [25, 200], [400, 150])
 
             if length <= 50:
-                cv.circle(img, (cx, cy), 15, (0, 255, 0), cv.FILLED)
+                cv.circle(video_data, (cx, cy), 15, (0, 255, 0), cv.FILLED)
 
-        cv.rectangle(img, (50, 150), (85, 400), (0, 255, 0), 3)
-        cv.rectangle(img, (50, int(self.volBar)), (85, 400), (0, 255, 0), cv.FILLED)
+        cv.rectangle(video_data, (50, 150), (85, 400), (0, 255, 0), 3)
+        cv.rectangle(video_data, (50, int(volBar)), (85, 400), (0, 255, 0), cv.FILLED)
 
-        return img
+        cTime = time.time()
+        fps = 1 / (cTime - pTime)
+        pTime = cTime
 
-def main():
-    st.title("Hand Gesture Volume Control")
-    st.write("Use your hand gestures to control the volume level indicator.")
+        cv.putText(video_data, f'FPS: {int(fps)}', (50, 70), cv.FONT_HERSHEY_PLAIN, 3, (255, 0, 0), 4)
+        
+        # Display the frame in Streamlit
+        stframe.image(video_data, channels="BGR")
 
-    webrtc_streamer(key="example", video_transformer_factory=VideoTransformer)
+        # Add a break condition for Streamlit (e.g., stop button)
+        if st.button('Stop'):
+            video_cap.release()
+            cv.destroyAllWindows()
+            break
 
 if __name__ == "__main__":
     main()
