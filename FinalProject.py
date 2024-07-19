@@ -6,9 +6,7 @@ import os
 import streamlit as st
 import tempfile
 import time
-import youtube_dl
-from moviepy.editor import VideoFileClip
-import shutil
+import yt_dlp as ydl  # Updated import
 
 os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 
@@ -25,9 +23,9 @@ def download_youtube_video(url):
         'noplaylist': True,
     }
     try:
-        with youtube_dl.YoutubeDL(ydl_opts) as ydl:
-            info_dict = ydl.extract_info(url, download=True)
-            video_file = ydl.prepare_filename(info_dict)
+        with ydl.YoutubeDL(ydl_opts) as ydl_instance:
+            info_dict = ydl_instance.extract_info(url, download=True)
+            video_file = ydl_instance.prepare_filename(info_dict)
         return video_file
     except Exception as e:
         st.error(f"Failed to download video: {e}")
