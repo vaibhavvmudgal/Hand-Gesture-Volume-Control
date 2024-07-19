@@ -7,6 +7,7 @@ validators
 langchain_groq
 pytube
 youtube-dl
+yt-dlp
 moviepy
 youtube-transcript-api
 unstructured
