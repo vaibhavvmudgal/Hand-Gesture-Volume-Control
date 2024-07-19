@@ -2,20 +2,34 @@ import cv2 as cv
 import numpy as np
 import HandModule as hm
 import math
-import os
 import streamlit as st
 import tempfile
+import os
 import time
 
-os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
+def main():
+    st.title("Hand Gesture Volume Control")
 
-import absl.logging
-absl.logging.set_verbosity(absl.logging.INFO)
+    # Upload video file
+    uploaded_file = st.file_uploader("Choose a video file", type=["mp4", "avi", "mov"])
 
-import tensorflow as tf
-tf.get_logger().setLevel('ERROR')
+    if uploaded_file is not None:
+        # Save uploaded file to a temporary location
+        temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4")
+        temp_file.write(uploaded_file.read())
+        temp_file.close()
 
-def process_video(video_path):
+        st.write("Video loaded. Use hand gestures to control volume.")
+
+        # Display video
+        st.video(temp_file.name)
+
+        # Process webcam feed for hand gestures
+        process_webcam()
+
+def process_webcam():
+    st.write("Processing webcam feed for hand gestures...")
+
     detect = hm.handDetector()
 
     minVol = 0
@@ -26,16 +40,15 @@ def process_video(video_path):
     cTime = 0
     pTime = 0
 
-    cap = cv.VideoCapture(video_path)
+    wCam, hCam = 640, 480
+    video_cap = cv.VideoCapture(0)
+    video_cap.set(3, wCam)
+    video_cap.set(4, hCam)
 
-    temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4")
-    temp_file.close()
+    stframe = st.empty()
 
-    fourcc = cv.VideoWriter_fourcc(*'mp4v')
-    out = cv.VideoWriter(temp_file.name, fourcc, 30.0, (640, 480))
-
-    while cap.isOpened():
-        ret, video_data = cap.read()
+    while True:
+        ret, video_data = video_cap.read()
         if not ret:
             break
 
@@ -65,30 +78,15 @@ def process_video(video_path):
         pTime = cTime
 
         cv.putText(video_data, f'FPS: {int(fps)}', (50, 70), cv.FONT_HERSHEY_PLAIN, 3, (255, 0, 0), 4)
-        out.write(video_data)
 
-    cap.release()
-    out.release()
+        # Display the frame in Streamlit
+        stframe.image(video_data, channels="BGR")
+
+        if cv.waitKey(1) == ord("q"):  # Press 'q' to exit
+            break
+
+    video_cap.release()
     cv.destroyAllWindows()
-
-    return temp_file.name
-
-def main():
-    st.title("Hand Gesture Volume Control")
-
-    # File upload
-    uploaded_file = st.file_uploader("Upload a video file", type=["mp4", "mov", "avi"])
-
-    if uploaded_file is not None:
-        # Save uploaded file to a temporary file
-        temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4")
-        temp_file.write(uploaded_file.read())
-        temp_file.close()
-
-        st.write("Processing video...")
-        video_file_path = process_video(temp_file.name)
-        if video_file_path:
-            st.video(video_file_path)
 
 if __name__ == "__main__":
     main()
