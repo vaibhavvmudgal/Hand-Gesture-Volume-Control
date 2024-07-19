@@ -1,24 +1,25 @@
-import streamlit as st
 import cv2 as cv
 import numpy as np
 import HandModule as hm
 import math
-import tempfile
-import os
+import streamlit as st
+import pyautogui
 import threading
-from queue import Queue
+from PIL import Image
+import io
 
-# Function to process frames in a separate thread
-def process_frame_thread(frame_queue, result_queue, detector):
-    while True:
-        frame = frame_queue.get()
-        if frame is None:
-            break
-        try:
-            processed_frame = process_frame(frame, detector)
-            result_queue.put(processed_frame)
-        except Exception as e:
-            st.error(f"Error processing frame: {e}")
+# Function to set system volume (This is platform-dependent. Adjust for your system.)
+def set_volume(volume):
+    """Set the system volume based on volume level (0-100)."""
+    try:
+        # For demonstration purposes, we simulate volume control with pyautogui
+        # In a real scenario, you might use system-specific libraries or commands
+        if volume < 50:
+            pyautogui.press('volume down')
+        elif volume > 50:
+            pyautogui.press('volume up')
+    except Exception as e:
+        st.error(f"Error setting volume: {e}")
 
 def process_frame(frame, detector):
     """Process a single frame for hand gestures."""
@@ -48,6 +49,9 @@ def process_frame(frame, detector):
             vol = np.interp(length, [25, 200], [0, 100])
             volBar = np.interp(length, [25, 200], [400, 150])
             
+            # Set volume based on detected hand gesture
+            set_volume(vol)
+
             if length <= 50:
                 cv.circle(frame, (cx, cy), 15, (0, 255, 0), cv.FILLED)
 
@@ -62,28 +66,27 @@ def process_frame(frame, detector):
         st.error(f"Error in process_frame: {e}")
         return frame
 
+def process_frame_thread(frame_queue, result_queue, detector):
+    """Thread function for processing frames."""
+    while True:
+        frame = frame_queue.get()
+        if frame is None:
+            break
+        processed_frame = process_frame(frame, detector)
+        result_queue.put(processed_frame)
+
 def main():
     st.title("Hand Gesture Volume Control")
 
-    # Upload video
-    st.write("Upload a video file:")
-    video_file = st.file_uploader("Choose a video file", type=["mp4", "mov"])
+    # Display instructions
+    st.write("Processing webcam feed for hand gestures...")
 
-    if video_file is not None:
-        # Save the uploaded video to a temporary file
-        video_path = tempfile.mktemp(suffix=".mp4")
-        with open(video_path, "wb") as f:
-            f.write(video_file.read())
+    detector = hm.handDetector()
 
-        st.write("Processing video...")
-
-        detector = hm.handDetector()
-        cap = cv.VideoCapture(video_path)
-        
-        if not cap.isOpened():
-            st.error("Failed to open video.")
-            return
-
+    # Use Streamlit's webcam component
+    webcam = st.camera_input("Capture webcam feed")
+    
+    if webcam:
         frame_queue = Queue()
         result_queue = Queue()
 
@@ -94,10 +97,10 @@ def main():
         stframe = st.empty()
         stop_button = st.button('Stop', key='stop_button')
 
-        while cap.isOpened():
-            ret, frame = cap.read()
-            if not ret:
-                st.write("Video ended or cannot read frame.")
+        while True:
+            frame = webcam.read()  # Read a frame from the webcam
+            if frame is None:
+                st.write("Webcam feed ended or cannot read frame.")
                 break
 
             # Add frame to processing queue
@@ -115,9 +118,8 @@ def main():
         # Signal the processing thread to exit
         frame_queue.put(None)
         processing_thread.join()
-
-        cap.release()
-        os.remove(video_path)  # Clean up the uploaded video file
+    else:
+        st.write("Webcam not available.")
 
 if __name__ == "__main__":
     main()
