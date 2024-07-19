@@ -4,6 +4,7 @@ import HandModule as hm
 import math
 import os
 import streamlit as st
+import tempfile
 import time
 
 os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
@@ -26,21 +27,20 @@ def get_volume():
 
 def main():
     st.title("Hand Gesture Volume Control")
-    
-    # Camera selection
-    camera_options = ["Webcam"]
-    camera = st.selectbox("Choose your camera:", camera_options)
+
+    # Video file upload
+    uploaded_file = st.file_uploader("Upload a video file", type=["mp4", "mov", "avi", "mkv"])
 
     start_button = st.button("Start")
 
-    if start_button:
-        run_camera()
+    if start_button and uploaded_file is not None:
+        tfile = tempfile.NamedTemporaryFile(delete=False) 
+        tfile.write(uploaded_file.read())
+        run_video(tfile.name)
 
-def run_camera():
+def run_video(video_path):
     wCam, hCam = 640, 480
-    video_cap = cv.VideoCapture(0)
-    video_cap.set(3, wCam)
-    video_cap.set(4, hCam)
+    video_cap = cv.VideoCapture(video_path)
 
     detect = hm.handDetector()
 
@@ -57,9 +57,9 @@ def run_camera():
     while True:
         ret, video_data = video_cap.read()
         if not ret:
-            st.write("Failed to read from camera.")
+            st.write("Failed to read from video.")
             break
-        
+
         video_data = detect.findHands(video_data)
         lmList = detect.findPosition(video_data, draw=False)
         if len(lmList) != 0:
