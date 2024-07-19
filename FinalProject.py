@@ -6,7 +6,6 @@ import os
 import streamlit as st
 import tempfile
 import time
-import yt_dlp as youtube_dl  # Updated library
 
 os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 
@@ -15,23 +14,6 @@ absl.logging.set_verbosity(absl.logging.INFO)
 
 import tensorflow as tf
 tf.get_logger().setLevel('ERROR')
-
-def download_youtube_video(url):
-    ydl_opts = {
-        'format': 'best',
-        'outtmpl': tempfile.mktemp(suffix=".mp4"),  # Temporary file path
-        'noplaylist': True,
-    }
-    try:
-        with youtube_dl.YoutubeDL(ydl_opts) as ydl:
-            info_dict = ydl.extract_info(url, download=True)
-            video_file = ydl.prepare_filename(info_dict)
-            if not os.path.isfile(video_file):
-                raise FileNotFoundError("Downloaded video file not found.")
-        return video_file
-    except Exception as e:
-        st.error(f"Failed to download video: {e}")
-        return None
 
 def process_video(video_path):
     detect = hm.handDetector()
@@ -94,19 +76,19 @@ def process_video(video_path):
 def main():
     st.title("Hand Gesture Volume Control")
 
-    # YouTube URL input
-    youtube_url = st.text_input("Enter YouTube URL:")
+    # File upload
+    uploaded_file = st.file_uploader("Upload a video file", type=["mp4", "mov", "avi"])
 
-    start_button = st.button("Start")
+    if uploaded_file is not None:
+        # Save uploaded file to a temporary file
+        temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4")
+        temp_file.write(uploaded_file.read())
+        temp_file.close()
 
-    if start_button and youtube_url:
-        st.write("Downloading and processing video...")
-        video_path = download_youtube_video(youtube_url)
-        if video_path:
-            st.write("Processing video...")
-            video_file_path = process_video(video_path)
-            if video_file_path:
-                st.video(video_file_path)
+        st.write("Processing video...")
+        video_file_path = process_video(temp_file.name)
+        if video_file_path:
+            st.video(video_file_path)
 
 if __name__ == "__main__":
     main()
