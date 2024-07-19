@@ -5,6 +5,16 @@ import HandModule as hm
 import math
 import tempfile
 import os
+import threading
+
+# Function to process frames in a separate thread
+def process_frame_thread(frame_queue, result_queue, detector):
+    while True:
+        frame = frame_queue.get()
+        if frame is None:
+            break
+        processed_frame = process_frame(frame, detector)
+        result_queue.put(processed_frame)
 
 def process_frame(frame, detector):
     """Process a single frame for hand gestures."""
@@ -66,6 +76,13 @@ def main():
             st.error("Failed to open video.")
             return
 
+        frame_queue = Queue()
+        result_queue = Queue()
+
+        # Start frame processing thread
+        processing_thread = threading.Thread(target=process_frame_thread, args=(frame_queue, result_queue, detector))
+        processing_thread.start()
+
         stframe = st.empty()
         stop_button = st.button('Stop', key='stop_button')
 
@@ -75,14 +92,21 @@ def main():
                 st.write("Video ended or cannot read frame.")
                 break
 
-            processed_frame = process_frame(frame, detector)
-            
-            # Display the frame
-            stframe.image(processed_frame, channels="BGR", use_column_width=True)
+            # Add frame to processing queue
+            frame_queue.put(frame)
+
+            # Display processed frame if available
+            if not result_queue.empty():
+                processed_frame = result_queue.get()
+                stframe.image(processed_frame, channels="BGR", use_column_width=True)
 
             if stop_button:
                 st.write("Processing stopped by user.")
                 break
+
+        # Signal the processing thread to exit
+        frame_queue.put(None)
+        processing_thread.join()
 
         cap.release()
         os.remove(video_path)  # Clean up the uploaded video file
