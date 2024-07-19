@@ -4,7 +4,6 @@ import HandModule as hm
 import math
 import streamlit as st
 import tempfile
-import os
 import time
 
 def main():
@@ -50,6 +49,7 @@ def process_webcam():
     while True:
         ret, video_data = video_cap.read()
         if not ret:
+            st.write("Failed to capture video from webcam.")
             break
 
         video_data = detect.findHands(video_data)
@@ -82,11 +82,12 @@ def process_webcam():
         # Display the frame in Streamlit
         stframe.image(video_data, channels="BGR")
 
-        if cv.waitKey(1) == ord("q"):  # Press 'q' to exit
+        # Streamlit does not support direct webcam capture stop functionality
+        if st.button("Stop"):
             break
 
     video_cap.release()
-    cv.destroyAllWindows()
+    # Note: cv.destroyAllWindows() is removed because it's not supported in Streamlit
 
 if __name__ == "__main__":
     main()
