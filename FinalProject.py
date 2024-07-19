@@ -6,7 +6,8 @@ import os
 import streamlit as st
 import tempfile
 import time
-import yt_dlp as ydl  # Updated import
+import yt_dlp as ydl
+from moviepy.editor import VideoFileClip
 
 os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 
@@ -21,6 +22,8 @@ def download_youtube_video(url):
         'format': 'best',
         'outtmpl': tempfile.mktemp(suffix=".mp4"),  # Temporary file path
         'noplaylist': True,
+        'quiet': False,  # Enable verbose output for debugging
+        'verbose': True  # Enable verbose output for debugging
     }
     try:
         with ydl.YoutubeDL(ydl_opts) as ydl_instance:
