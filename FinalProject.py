@@ -8,6 +8,7 @@ import tempfile
 import time
 import youtube_dl
 from moviepy.editor import VideoFileClip
+import shutil
 
 os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 
@@ -17,31 +18,11 @@ absl.logging.set_verbosity(absl.logging.INFO)
 import tensorflow as tf
 tf.get_logger().setLevel('ERROR')
 
-def set_volume(volume_level, video_path):
-    """Set the volume of the video."""
-    clip = VideoFileClip(video_path)
-    new_clip = clip.volumex(volume_level / 100)
-    temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4")
-    new_clip.write_videofile(temp_file.name, codec='libx264')
-    return temp_file.name
-
-def main():
-    st.title("Hand Gesture Volume Control")
-    
-    # YouTube URL input
-    youtube_url = st.text_input("Enter YouTube URL:")
-
-    start_button = st.button("Start")
-
-    if start_button and youtube_url:
-        video_path = download_youtube_video(youtube_url)
-        if video_path:
-            run_video(video_path)
-
 def download_youtube_video(url):
     ydl_opts = {
         'format': 'best',
         'outtmpl': tempfile.mktemp(suffix=".mp4"),  # Temporary file path
+        'noplaylist': True,
     }
     try:
         with youtube_dl.YoutubeDL(ydl_opts) as ydl:
@@ -52,7 +33,23 @@ def download_youtube_video(url):
         st.error(f"Failed to download video: {e}")
         return None
 
-def run_video(video_path):
+def main():
+    st.title("Hand Gesture Volume Control")
+
+    # YouTube URL input
+    youtube_url = st.text_input("Enter YouTube URL:")
+
+    start_button = st.button("Start")
+
+    if start_button and youtube_url:
+        video_path = download_youtube_video(youtube_url)
+        if video_path:
+            st.write("Processing video...")
+            video_file_path = process_video(video_path)
+            if video_file_path:
+                st.video(video_file_path)
+
+def process_video(video_path):
     detect = hm.handDetector()
 
     minVol = 0
@@ -63,14 +60,17 @@ def run_video(video_path):
     cTime = 0
     pTime = 0
 
-    stframe = st.empty()
-
     cap = cv.VideoCapture(video_path)
+
+    temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4")
+    temp_file.close()
+
+    fourcc = cv.VideoWriter_fourcc(*'mp4v')
+    out = cv.VideoWriter(temp_file.name, fourcc, 30.0, (640, 480))
 
     while cap.isOpened():
         ret, video_data = cap.read()
         if not ret:
-            st.write("Failed to read from video.")
             break
 
         video_data = detect.findHands(video_data)
@@ -99,15 +99,13 @@ def run_video(video_path):
         pTime = cTime
 
         cv.putText(video_data, f'FPS: {int(fps)}', (50, 70), cv.FONT_HERSHEY_PLAIN, 3, (255, 0, 0), 4)
-        
-        # Display the frame in Streamlit
-        stframe.image(video_data, channels="BGR")
-
-        if cv.waitKey(1) == ord("a"):
-            break
+        out.write(video_data)
 
     cap.release()
+    out.release()
     cv.destroyAllWindows()
+
+    return temp_file.name
 
 if __name__ == "__main__":
     main()
