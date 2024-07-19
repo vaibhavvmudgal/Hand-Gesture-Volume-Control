@@ -1,63 +1,78 @@
+import streamlit as st
 import cv2 as cv
+import mediapipe as mp
 import numpy as np
-import HandModule as hm
 import math
 import os
-import streamlit as st
-import time
 
-os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
+class handDetector:
+    def __init__(self, mode=False, maxHands=2, detCon=0.5, trackCon=0.5):
+        self.mode = mode
+        self.maxHands = maxHands
+        self.detCon = detCon
+        self.trackCon = trackCon
+        self.mpHands = mp.solutions.hands
+        self.hands = self.mpHands.Hands(static_image_mode=self.mode, max_num_hands=self.maxHands, 
+                                        min_detection_confidence=self.detCon, min_tracking_confidence=self.trackCon)
+        self.mpDraw = mp.solutions.drawing_utils
 
-import absl.logging
-absl.logging.set_verbosity(absl.logging.INFO)
+    def findHands(self, video_data, draw=True):
+        videoRGB = cv.cvtColor(video_data, cv.COLOR_BGR2RGB)  # Convert to RGB
+        self.results = self.hands.process(videoRGB)
 
-import tensorflow as tf
-tf.get_logger().setLevel('ERROR')
+        if self.results.multi_hand_landmarks:
+            for handLms in self.results.multi_hand_landmarks:
+                if draw:
+                    self.mpDraw.draw_landmarks(video_data, handLms, self.mpHands.HAND_CONNECTIONS)
 
-def set_volume(volume_level):
-    """Set the system volume on macOS."""
-    osascript_command = f"osascript -e 'set volume output volume {volume_level}'"
-    os.system(osascript_command)
+        return video_data
 
-def get_volume():
-    """Get the system volume on macOS."""
-    osascript_command = "osascript -e 'output volume of (get volume settings)'"
-    return int(os.popen(osascript_command).read().strip())
+    def findPosition(self, video_data, handNo=0, draw=True):
+        lmList = []
+
+        if self.results.multi_hand_landmarks:
+            myHand = self.results.multi_hand_landmarks[handNo]
+            for id, lm in enumerate(myHand.landmark):
+                h, w, c = video_data.shape
+                cx, cy = int(lm.x * w), int(lm.y * h)
+                lmList.append([id, cx, cy])
+                if draw:
+                    cv.circle(video_data, (cx, cy), 15, (255, 0, 255), cv.FILLED)
+
+        return lmList
 
 def main():
     st.title("Hand Gesture Volume Control")
+    st.text("Press 'q' to exit")
 
-    # Camera selection
-    camera_options = ["Webcam"]
-    camera = st.selectbox("Choose your camera:", camera_options)
+    run = st.checkbox('Run')
+    FRAME_WINDOW = st.image([])
 
-    start_button = st.button("Start")
-
-    if start_button:
-        run_camera()
-
-def run_camera():
-    wCam, hCam = 640, 480
-    video_cap = cv.VideoCapture(0)
-    video_cap.set(3, wCam)
-    video_cap.set(4, hCam)
-
-    detect = hm.handDetector()
+    detect = handDetector()
 
     minVol = 0
     maxVol = 100
     volBar = 300
     vol = 0
 
-    cTime = 0
-    pTime = 0
+    def set_volume(volume_level):
+        """Set the system volume on macOS."""
+        osascript_command = f"osascript -e 'set volume output volume {volume_level}'"
+        os.system(osascript_command)
 
-    stframe = st.empty()
+    def get_volume():
+        """Get the system volume on macOS."""
+        osascript_command = "osascript -e 'output volume of (get volume settings)'"
+        return int(os.popen(osascript_command).read().strip())
 
-    while True:
-        ret, video_data = video_cap.read()
+    cap = cv.VideoCapture(0)
+    if not cap.isOpened():
+        st.error("Failed to read from camera.")
+        return
+
+    while run:
+        ret, video_data = cap.read()
         if not ret:
-            st.error("Failed to read from camera.")
             break
 
         video_data = detect.findHands(video_data)
@@ -82,19 +97,11 @@ def run_camera():
         cv.rectangle(video_data, (50, 150), (85, 400), (0, 255, 0), 3)
         cv.rectangle(video_data, (50, int(volBar)), (85, 400), (0, 255, 0), cv.FILLED)
 
-        cTime = time.time()
-        fps = 1 / (cTime - pTime)
-        pTime = cTime
+        # Update the Streamlit frame window with the latest frame
+        FRAME_WINDOW.image(video_data, channels="BGR")
 
-        cv.putText(video_data, f'FPS: {int(fps)}', (50, 70), cv.FONT_HERSHEY_PLAIN, 3, (255, 0, 0), 4)
-        
-        # Display the frame in Streamlit
-        stframe.image(video_data, channels="BGR")
-
-        if cv.waitKey(1) == ord("a"):
-            break
-
-    video_cap.release()
+    cap.release()
+    cv.destroyAllWindows()
 
 if __name__ == "__main__":
     main()
