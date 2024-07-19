@@ -47,7 +47,7 @@ def process_frame(frame, detector):
 def main():
     st.title("Hand Gesture Volume Control")
 
-    # Load video
+    # Upload video
     st.write("Upload a video file:")
     video_file = st.file_uploader("Choose a video file", type=["mp4", "mov"])
 
@@ -67,8 +67,6 @@ def main():
             return
 
         stframe = st.empty()
-
-        # Unique key for the stop button to avoid DuplicateWidgetID error
         stop_button = st.button('Stop', key='stop_button')
 
         while cap.isOpened():
@@ -79,10 +77,9 @@ def main():
 
             processed_frame = process_frame(frame, detector)
             
-            # Convert to PIL Image and display
+            # Display the frame
             stframe.image(processed_frame, channels="BGR", use_column_width=True)
 
-            # Check if the stop button was pressed
             if stop_button:
                 st.write("Processing stopped by user.")
                 break
