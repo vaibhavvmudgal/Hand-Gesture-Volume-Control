@@ -3,37 +3,34 @@ import numpy as np
 import HandModule as hm
 import math
 import streamlit as st
-import pyautogui
-import threading
-from PIL import Image
-import io
 
-# Function to set system volume (This is platform-dependent. Adjust for your system.)
-def set_volume(volume):
-    """Set the system volume based on volume level (0-100)."""
-    try:
-        # For demonstration purposes, we simulate volume control with pyautogui
-        # In a real scenario, you might use system-specific libraries or commands
-        if volume < 50:
-            pyautogui.press('volume down')
-        elif volume > 50:
-            pyautogui.press('volume up')
-    except Exception as e:
-        st.error(f"Error setting volume: {e}")
+def simulate_volume_control(length):
+    """Simulate volume control for cloud deployment."""
+    min_length = 25
+    max_length = 200
+    min_volume = 0
+    max_volume = 100
+
+    # Normalize length and calculate volume
+    normalized_length = np.clip(length, min_length, max_length)
+    volume = np.interp(normalized_length, [min_length, max_length], [min_volume, max_volume])
+    
+    return volume
 
 def process_frame(frame, detector):
-    """Process a single frame for hand gestures."""
+    """Process a single frame for hand gestures and simulate volume control."""
     if frame is None:
         return frame
 
     try:
         # Convert to RGB for hand detection
         rgb_frame = cv.cvtColor(frame, cv.COLOR_BGR2RGB)
-        
+
         # Process the frame with hand detector
         processed_frame = detector.findHands(rgb_frame)
         lmList = detector.findPosition(rgb_frame, draw=False)
 
+        volume = 50  # Default volume
         if lmList:
             # Get coordinates of hand landmarks
             x1, y1 = lmList[4][1], lmList[4][2]
@@ -46,14 +43,8 @@ def process_frame(frame, detector):
             cv.line(frame, (x1, y1), (x2, y2), (255, 0, 255), 3)
 
             length = math.hypot(x2 - x1, y2 - y1)
-            vol = np.interp(length, [25, 200], [0, 100])
+            volume = simulate_volume_control(length)
             volBar = np.interp(length, [25, 200], [400, 150])
-            
-            # Set volume based on detected hand gesture
-            set_volume(vol)
-
-            if length <= 50:
-                cv.circle(frame, (cx, cy), 15, (0, 255, 0), cv.FILLED)
 
             # Draw volume bar
             cv.rectangle(frame, (50, 150), (85, 400), (0, 255, 0), 3)
@@ -61,63 +52,40 @@ def process_frame(frame, detector):
 
         # Convert to BGR for Streamlit
         frame = cv.cvtColor(frame, cv.COLOR_RGB2BGR)
-        return frame
+        return frame, volume
     except Exception as e:
         st.error(f"Error in process_frame: {e}")
-        return frame
-
-def process_frame_thread(frame_queue, result_queue, detector):
-    """Thread function for processing frames."""
-    while True:
-        frame = frame_queue.get()
-        if frame is None:
-            break
-        processed_frame = process_frame(frame, detector)
-        result_queue.put(processed_frame)
+        return frame, 50
 
 def main():
     st.title("Hand Gesture Volume Control")
-
-    # Display instructions
-    st.write("Processing webcam feed for hand gestures...")
 
     detector = hm.handDetector()
 
     # Use Streamlit's webcam component
     webcam = st.camera_input("Capture webcam feed")
-    
+
     if webcam:
-        frame_queue = Queue()
-        result_queue = Queue()
-
-        # Start frame processing thread
-        processing_thread = threading.Thread(target=process_frame_thread, args=(frame_queue, result_queue, detector))
-        processing_thread.start()
-
         stframe = st.empty()
         stop_button = st.button('Stop', key='stop_button')
 
+        volume_display = st.empty()
         while True:
             frame = webcam.read()  # Read a frame from the webcam
             if frame is None:
                 st.write("Webcam feed ended or cannot read frame.")
                 break
 
-            # Add frame to processing queue
-            frame_queue.put(frame)
+            # Process and display the frame
+            processed_frame, volume = process_frame(frame, detector)
+            stframe.image(processed_frame, channels="BGR", use_column_width=True)
 
-            # Display processed frame if available
-            if not result_queue.empty():
-                processed_frame = result_queue.get()
-                stframe.image(processed_frame, channels="BGR", use_column_width=True)
+            # Display simulated volume level
+            volume_display.write(f"Simulated Volume Level: {volume:.2f}")
 
             if stop_button:
                 st.write("Processing stopped by user.")
                 break
-
-        # Signal the processing thread to exit
-        frame_queue.put(None)
-        processing_thread.join()
     else:
         st.write("Webcam not available.")
 
