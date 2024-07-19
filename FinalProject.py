@@ -6,9 +6,6 @@ import math
 import tempfile
 import os
 
-# Define constants
-VIDEO_PATH = 'sample_video.mp4'  # Path to the pre-loaded video file
-
 def process_frame(frame, detector):
     """Process a single frame for hand gestures."""
     if frame is None:
@@ -55,11 +52,13 @@ def main():
     video_file = st.file_uploader("Choose a video file", type=["mp4", "mov"])
 
     if video_file is not None:
-        video_path = 'uploaded_video.mp4'
+        # Save the uploaded video to a temporary file
+        video_path = tempfile.mktemp(suffix=".mp4")
         with open(video_path, "wb") as f:
             f.write(video_file.read())
 
         st.write("Processing video...")
+
         detector = hm.handDetector()
         cap = cv.VideoCapture(video_path)
         
@@ -75,7 +74,7 @@ def main():
         while cap.isOpened():
             ret, frame = cap.read()
             if not ret:
-                st.write("Video ended.")
+                st.write("Video ended or cannot read frame.")
                 break
 
             processed_frame = process_frame(frame, detector)
@@ -85,6 +84,7 @@ def main():
 
             # Check if the stop button was pressed
             if stop_button:
+                st.write("Processing stopped by user.")
                 break
 
         cap.release()
@@ -92,3 +92,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+    
