@@ -9,6 +9,7 @@ pytube
 youtube-dl
 yt-dlp
 moviepy
+Pillow
 youtube-transcript-api
 unstructured
 comtypes
