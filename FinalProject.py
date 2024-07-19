@@ -1,4 +1,5 @@
 import streamlit as st
+from streamlit_webrtc import webrtc_streamer, VideoTransformerBase
 import cv2 as cv
 import mediapipe as mp
 import numpy as np
@@ -41,67 +42,49 @@ class handDetector:
 
         return lmList
 
-def main():
-    st.title("Hand Gesture Volume Control")
-    st.text("Press 'q' to exit")
+class VideoTransformer(VideoTransformerBase):
+    def __init__(self):
+        self.detector = handDetector()
+        self.minVol = 0
+        self.maxVol = 100
+        self.volBar = 300
 
-    run = st.checkbox('Run')
-    FRAME_WINDOW = st.image([])
-
-    detect = handDetector()
-
-    minVol = 0
-    maxVol = 100
-    volBar = 300
-    vol = 0
-
-    def set_volume(volume_level):
+    def set_volume(self, volume_level):
         """Set the system volume on macOS."""
         osascript_command = f"osascript -e 'set volume output volume {volume_level}'"
         os.system(osascript_command)
 
-    def get_volume():
-        """Get the system volume on macOS."""
-        osascript_command = "osascript -e 'output volume of (get volume settings)'"
-        return int(os.popen(osascript_command).read().strip())
+    def transform(self, frame):
+        img = frame.to_ndarray(format="bgr24")
 
-    cap = cv.VideoCapture(0)
-    if not cap.isOpened():
-        st.error("Failed to read from camera.")
-        return
-
-    while run:
-        ret, video_data = cap.read()
-        if not ret:
-            break
-
-        video_data = detect.findHands(video_data)
-        lmList = detect.findPosition(video_data, draw=False)
+        img = self.detector.findHands(img)
+        lmList = self.detector.findPosition(img, draw=False)
         if len(lmList) != 0:
             x1, y1 = lmList[4][1], lmList[4][2]
             x2, y2 = lmList[8][1], lmList[8][2]
             cx, cy = (x1 + x2) // 2, (y1 + y2) // 2
 
-            cv.circle(video_data, (x1, y1), 15, (255, 0, 255), cv.FILLED)
-            cv.circle(video_data, (x2, y2), 15, (255, 0, 255), cv.FILLED)
-            cv.line(video_data, (x1, y1), (x2, y2), (255, 0, 255), 3)
+            cv.circle(img, (x1, y1), 15, (255, 0, 255), cv.FILLED)
+            cv.circle(img, (x2, y2), 15, (255, 0, 255), cv.FILLED)
+            cv.line(img, (x1, y1), (x2, y2), (255, 0, 255), 3)
 
             length = math.hypot(x2 - x1, y2 - y1)
-            vol = np.interp(length, [25, 200], [minVol, maxVol])
-            volBar = np.interp(length, [25, 200], [400, 150])
-            set_volume(vol)
+            vol = np.interp(length, [25, 200], [self.minVol, self.maxVol])
+            self.volBar = np.interp(length, [25, 200], [400, 150])
+            self.set_volume(vol)
 
             if length <= 50:
-                cv.circle(video_data, (cx, cy), 15, (0, 255, 0), cv.FILLED)
+                cv.circle(img, (cx, cy), 15, (0, 255, 0), cv.FILLED)
 
-        cv.rectangle(video_data, (50, 150), (85, 400), (0, 255, 0), 3)
-        cv.rectangle(video_data, (50, int(volBar)), (85, 400), (0, 255, 0), cv.FILLED)
+        cv.rectangle(img, (50, 150), (85, 400), (0, 255, 0), 3)
+        cv.rectangle(img, (50, int(self.volBar)), (85, 400), (0, 255, 0), cv.FILLED)
 
-        # Update the Streamlit frame window with the latest frame
-        FRAME_WINDOW.image(video_data, channels="BGR")
+        return img
 
-    cap.release()
-    cv.destroyAllWindows()
+def main():
+    st.title("Hand Gesture Volume Control")
+
+    webrtc_streamer(key="example", video_transformer_factory=VideoTransformer)
 
 if __name__ == "__main__":
     main()
