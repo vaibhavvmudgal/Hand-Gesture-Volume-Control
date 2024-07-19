@@ -30,36 +30,43 @@ def run_camera():
 
     while True:
         ret, video_data = video_cap.read()
-        video_data = detect.findHands(video_data)
-        lmList = detect.findPosition(video_data, draw=False)
-        if len(lmList) != 0:
-            x1, y1 = lmList[4][1], lmList[4][2]
-            x2, y2 = lmList[8][1], lmList[8][2]
-            cx, cy = (x1 + x2) // 2, (y1 + y2) // 2
+        if not ret:
+            st.error("Failed to capture image from webcam.")
+            break
 
-            cv.circle(video_data, (x1, y1), 15, (255, 0, 255), cv.FILLED)
-            cv.circle(video_data, (x2, y2), 15, (255, 0, 255), cv.FILLED)
-            cv.line(video_data, (x1, y1), (x2, y2), (255, 0, 255), 3)
+        try:
+            video_data = detect.findHands(video_data)
+            lmList = detect.findPosition(video_data, draw=False)
+            if len(lmList) != 0:
+                x1, y1 = lmList[4][1], lmList[4][2]
+                x2, y2 = lmList[8][1], lmList[8][2]
+                cx, cy = (x1 + x2) // 2, (y1 + y2) // 2
 
-            length = math.hypot(x2 - x1, y2 - y1)
-            volBar = np.interp(length, [25, 200], [400, 150])
+                cv.circle(video_data, (x1, y1), 15, (255, 0, 255), cv.FILLED)
+                cv.circle(video_data, (x2, y2), 15, (255, 0, 255), cv.FILLED)
+                cv.line(video_data, (x1, y1), (x2, y2), (255, 0, 255), 3)
 
-            if length <= 50:
-                cv.circle(video_data, (cx, cy), 15, (0, 255, 0), cv.FILLED)
+                length = math.hypot(x2 - x1, y2 - y1)
+                volBar = np.interp(length, [25, 200], [400, 150])
 
-        cv.rectangle(video_data, (50, 150), (85, 400), (0, 255, 0), 3)
-        cv.rectangle(video_data, (50, int(volBar)), (85, 400), (0, 255, 0), cv.FILLED)
+                if length <= 50:
+                    cv.circle(video_data, (cx, cy), 15, (0, 255, 0), cv.FILLED)
 
-        cTime = time.time()
-        fps = 1 / (cTime - pTime)
-        pTime = cTime
+            cv.rectangle(video_data, (50, 150), (85, 400), (0, 255, 0), 3)
+            cv.rectangle(video_data, (50, int(volBar)), (85, 400), (0, 255, 0), cv.FILLED)
 
-        cv.putText(video_data, f'FPS: {int(fps)}', (50, 70), cv.FONT_HERSHEY_PLAIN, 3, (255, 0, 0), 4)
+            cTime = time.time()
+            fps = 1 / (cTime - pTime)
+            pTime = cTime
 
-        # Display the frame in Streamlit
-        stframe.image(video_data, channels="BGR")
+            cv.putText(video_data, f'FPS: {int(fps)}', (50, 70), cv.FONT_HERSHEY_PLAIN, 3, (255, 0, 0), 4)
 
-        # Exit loop if user clicks the 'Stop' button
+            # Display the frame in Streamlit
+            stframe.image(video_data, channels="BGR")
+        
+        except Exception as e:
+            st.error(f"An error occurred: {e}")
+
         if st.button("Stop"):
             break
 
