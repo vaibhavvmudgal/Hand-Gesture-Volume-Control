@@ -3,75 +3,109 @@ import numpy as np
 import HandModule as hm
 import math
 import streamlit as st
-import time
+from PIL import Image
+import io
+from queue import Queue
+import threading
+
+def process_frame(frame, detector):
+    """Process a single frame for hand gestures."""
+    if frame is None:
+        return frame
+
+    try:
+        # Convert PIL Image to NumPy array
+        frame = np.array(frame)
+
+        # Convert to RGB for hand detection
+        rgb_frame = cv.cvtColor(frame, cv.COLOR_BGR2RGB)
+
+        # Process the frame with hand detector
+        processed_frame = detector.findHands(rgb_frame)
+        lmList = detector.findPosition(rgb_frame, draw=False)
+
+        if lmList:
+            # Get coordinates of hand landmarks
+            x1, y1 = lmList[4][1], lmList[4][2]
+            x2, y2 = lmList[8][1], lmList[8][2]
+            cx, cy = (x1 + x2) // 2, (y1 + y2) // 2
+
+            # Draw landmarks and lines
+            cv.circle(frame, (x1, y1), 15, (255, 0, 255), cv.FILLED)
+            cv.circle(frame, (x2, y2), 15, (255, 0, 255), cv.FILLED)
+            cv.line(frame, (x1, y1), (x2, y2), (255, 0, 255), 3)
+
+            length = math.hypot(x2 - x1, y2 - y1)
+            volBar = np.interp(length, [25, 200], [400, 150])
+            
+            # Draw volume bar
+            cv.rectangle(frame, (50, 150), (85, 400), (0, 255, 0), 3)
+            cv.rectangle(frame, (50, int(volBar)), (85, 400), (0, 255, 0), cv.FILLED)
+
+        # Convert to BGR for Streamlit
+        frame = cv.cvtColor(frame, cv.COLOR_RGB2BGR)
+        return frame
+    except Exception as e:
+        st.error(f"Error in process_frame: {e}")
+        return frame
+
+def process_frame_thread(frame_queue, result_queue, detector):
+    """Thread function for processing frames."""
+    while True:
+        frame = frame_queue.get()
+        if frame is None:
+            break
+        processed_frame = process_frame(frame, detector)
+        result_queue.put(processed_frame)
 
 def main():
-    st.title("Hand Gesture Control")
+    st.title("Hand Gesture Detection")
 
-    start_button = st.button("Start")
+    # Display instructions
+    st.write("Processing webcam feed for hand gestures...")
 
-    if start_button:
-        run_camera()
+    detector = hm.handDetector()
 
-def run_camera():
-    wCam, hCam = 640, 480
-    video_cap = cv.VideoCapture(0)
-    video_cap.set(3, wCam)
-    video_cap.set(4, hCam)
+    # Use Streamlit's webcam component
+    webcam = st.camera_input("Capture webcam feed")
+    
+    if webcam:
+        frame_queue = Queue()
+        result_queue = Queue()
 
-    detect = hm.handDetector()
+        # Start frame processing thread
+        processing_thread = threading.Thread(target=process_frame_thread, args=(frame_queue, result_queue, detector))
+        processing_thread.start()
 
-    volBar = 300
+        stframe = st.empty()
+        stop_button = st.button('Stop', key='stop_button')
 
-    cTime = 0
-    pTime = 0
+        while True:
+            frame = webcam.read()  # Read a frame from the webcam
+            if frame is None:
+                st.write("Webcam feed ended or cannot read frame.")
+                break
 
-    stframe = st.empty()
+            # Convert the PIL Image to a NumPy array
+            frame = np.array(frame)
 
-    while True:
-        ret, video_data = video_cap.read()
-        if not ret:
-            st.error("Failed to capture image from webcam.")
-            break
+            # Add frame to processing queue
+            frame_queue.put(frame)
 
-        try:
-            video_data = detect.findHands(video_data)
-            lmList = detect.findPosition(video_data, draw=False)
-            if len(lmList) != 0:
-                x1, y1 = lmList[4][1], lmList[4][2]
-                x2, y2 = lmList[8][1], lmList[8][2]
-                cx, cy = (x1 + x2) // 2, (y1 + y2) // 2
+            # Display processed frame if available
+            if not result_queue.empty():
+                processed_frame = result_queue.get()
+                stframe.image(processed_frame, channels="BGR", use_column_width=True)
 
-                cv.circle(video_data, (x1, y1), 15, (255, 0, 255), cv.FILLED)
-                cv.circle(video_data, (x2, y2), 15, (255, 0, 255), cv.FILLED)
-                cv.line(video_data, (x1, y1), (x2, y2), (255, 0, 255), 3)
+            if stop_button:
+                st.write("Processing stopped by user.")
+                break
 
-                length = math.hypot(x2 - x1, y2 - y1)
-                volBar = np.interp(length, [25, 200], [400, 150])
-
-                if length <= 50:
-                    cv.circle(video_data, (cx, cy), 15, (0, 255, 0), cv.FILLED)
-
-            cv.rectangle(video_data, (50, 150), (85, 400), (0, 255, 0), 3)
-            cv.rectangle(video_data, (50, int(volBar)), (85, 400), (0, 255, 0), cv.FILLED)
-
-            cTime = time.time()
-            fps = 1 / (cTime - pTime)
-            pTime = cTime
-
-            cv.putText(video_data, f'FPS: {int(fps)}', (50, 70), cv.FONT_HERSHEY_PLAIN, 3, (255, 0, 0), 4)
-
-            # Display the frame in Streamlit
-            stframe.image(video_data, channels="BGR")
-        
-        except Exception as e:
-            st.error(f"An error occurred: {e}")
-
-        if st.button("Stop"):
-            break
-
-    video_cap.release()
-    cv.destroyAllWindows()
+        # Signal the processing thread to exit
+        frame_queue.put(None)
+        processing_thread.join()
+    else:
+        st.write("Webcam not available.")
 
 if __name__ == "__main__":
     main()
