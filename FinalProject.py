@@ -6,7 +6,7 @@ import os
 import streamlit as st
 import tempfile
 import time
-from pytube import YouTube
+import youtube_dl
 from moviepy.editor import VideoFileClip
 
 os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
@@ -27,7 +27,7 @@ def set_volume(volume_level, video_path):
 
 def main():
     st.title("Hand Gesture Volume Control")
-
+    
     # YouTube URL input
     youtube_url = st.text_input("Enter YouTube URL:")
 
@@ -39,12 +39,15 @@ def main():
             run_video(video_path)
 
 def download_youtube_video(url):
+    ydl_opts = {
+        'format': 'best',
+        'outtmpl': tempfile.mktemp(suffix=".mp4"),  # Temporary file path
+    }
     try:
-        yt = YouTube(url)
-        stream = yt.streams.filter(progressive=True, file_extension='mp4').first()
-        temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4")
-        stream.download(output_path=os.path.dirname(temp_file.name), filename=os.path.basename(temp_file.name))
-        return temp_file.name
+        with youtube_dl.YoutubeDL(ydl_opts) as ydl:
+            info_dict = ydl.extract_info(url, download=True)
+            video_file = ydl.prepare_filename(info_dict)
+        return video_file
     except Exception as e:
         st.error(f"Failed to download video: {e}")
         return None
