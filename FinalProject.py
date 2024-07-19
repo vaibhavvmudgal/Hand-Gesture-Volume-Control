@@ -6,11 +6,7 @@ import streamlit as st
 import time
 
 def main():
-    st.title("Hand Gesture Volume Control")
-
-    # Camera selection
-    camera_options = ["Webcam"]
-    camera = st.selectbox("Choose your camera:", camera_options)
+    st.title("Hand Gesture Control")
 
     start_button = st.button("Start")
 
@@ -25,10 +21,7 @@ def run_camera():
 
     detect = hm.handDetector()
 
-    minVol = 0
-    maxVol = 100
     volBar = 300
-    vol = 0
 
     cTime = 0
     pTime = 0
@@ -37,10 +30,6 @@ def run_camera():
 
     while True:
         ret, video_data = video_cap.read()
-        if not ret:
-            st.error("Failed to capture video.")
-            break
-
         video_data = detect.findHands(video_data)
         lmList = detect.findPosition(video_data, draw=False)
         if len(lmList) != 0:
@@ -66,15 +55,16 @@ def run_camera():
         pTime = cTime
 
         cv.putText(video_data, f'FPS: {int(fps)}', (50, 70), cv.FONT_HERSHEY_PLAIN, 3, (255, 0, 0), 4)
-        
+
         # Display the frame in Streamlit
         stframe.image(video_data, channels="BGR")
 
-        # Add a break condition for Streamlit (e.g., stop button)
-        if st.button('Stop'):
-            video_cap.release()
-            cv.destroyAllWindows()
+        # Exit loop if user clicks the 'Stop' button
+        if st.button("Stop"):
             break
+
+    video_cap.release()
+    cv.destroyAllWindows()
 
 if __name__ == "__main__":
     main()
