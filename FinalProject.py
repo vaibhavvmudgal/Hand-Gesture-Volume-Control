@@ -1,5 +1,4 @@
 import streamlit as st
-import streamlit.components.v1 as components
 import cv2 as cv
 import numpy as np
 import HandModule as hm
@@ -8,64 +7,85 @@ import tempfile
 import os
 from PIL import Image
 
-def webcam_component():
-    """Render the HTML component for webcam access."""
-    components.html(open('webcam_component.html', 'r').read(), height=540)
+# Define constants
+VIDEO_PATH = 'sample_video.mp4'  # Path to the pre-loaded video file
 
 def process_frame(frame, detector):
     """Process a single frame for hand gestures."""
-    frame = cv.cvtColor(frame, cv.COLOR_BGR2RGB)
-    frame = detector.findHands(frame)
-    lmList = detector.findPosition(frame, draw=False)
-    if len(lmList) != 0:
+    if frame is None:
+        return frame
+
+    # Convert to RGB for hand detection
+    rgb_frame = cv.cvtColor(frame, cv.COLOR_BGR2RGB)
+    
+    # Process the frame with hand detector
+    processed_frame = detector.findHands(rgb_frame)
+    lmList = detector.findPosition(rgb_frame, draw=False)
+
+    if lmList:
+        # Get coordinates of hand landmarks
         x1, y1 = lmList[4][1], lmList[4][2]
         x2, y2 = lmList[8][1], lmList[8][2]
+        cx, cy = (x1 + x2) // 2, (y1 + y2) // 2
+
+        # Draw landmarks and lines
+        cv.circle(frame, (x1, y1), 15, (255, 0, 255), cv.FILLED)
+        cv.circle(frame, (x2, y2), 15, (255, 0, 255), cv.FILLED)
+        cv.line(frame, (x1, y1), (x2, y2), (255, 0, 255), 3)
+
         length = math.hypot(x2 - x1, y2 - y1)
         vol = np.interp(length, [25, 200], [0, 100])
         volBar = np.interp(length, [25, 200], [400, 150])
+        
         if length <= 50:
-            cv.circle(frame, (int((x1 + x2) / 2), int((y1 + y2) / 2)), 15, (0, 255, 0), cv.FILLED)
+            cv.circle(frame, (cx, cy), 15, (0, 255, 0), cv.FILLED)
+
+        # Draw volume bar
+        cv.rectangle(frame, (50, 150), (85, 400), (0, 255, 0), 3)
+        cv.rectangle(frame, (50, int(volBar)), (85, 400), (0, 255, 0), cv.FILLED)
+
+    # Convert to BGR for Streamlit
     frame = cv.cvtColor(frame, cv.COLOR_RGB2BGR)
     return frame
 
 def main():
-    st.title("Live Webcam Hand Gesture Control")
+    st.title("Hand Gesture Volume Control")
 
-    st.write("This application uses your webcam to control the volume based on hand gestures.")
-    webcam_component()
-    
-    detector = hm.handDetector()
-    
-    # Create a temporary file to save video
-    temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4")
-    temp_file.close()
+    # Load video
+    st.write("Video:")
+    video_file = st.file_uploader("Upload a video file", type=["mp4", "mov"])
 
-    # Open video capture
-    cap = cv.VideoCapture(0)
-    fourcc = cv.VideoWriter_fourcc(*'mp4v')
-    out = cv.VideoWriter(temp_file.name, fourcc, 20.0, (640, 480))
+    if video_file is not None:
+        video_path = 'uploaded_video.mp4'
+        with open(video_path, "wb") as f:
+            f.write(video_file.read())
 
-    stframe = st.empty()
-    
-    while True:
-        ret, frame = cap.read()
-        if not ret:
-            break
+        st.write("Processing video...")
+        detector = hm.handDetector()
+        cap = cv.VideoCapture(video_path)
         
-        processed_frame = process_frame(frame, detector)
-        out.write(processed_frame)
+        if not cap.isOpened():
+            st.error("Failed to open video.")
+            return
 
-        # Convert to PIL Image and display
-        stframe.image(processed_frame, channels="BGR", use_column_width=True)
+        stframe = st.empty()
 
-        if st.button('Stop'):
-            break
+        while cap.isOpened():
+            ret, frame = cap.read()
+            if not ret:
+                st.write("Video ended.")
+                break
 
-    cap.release()
-    out.release()
-    cv.destroyAllWindows()
-    
-    st.write("Video recording saved to", temp_file.name)
+            processed_frame = process_frame(frame, detector)
+            
+            # Convert to PIL Image and display
+            stframe.image(processed_frame, channels="BGR", use_column_width=True)
+
+            if st.button('Stop'):
+                break
+
+        cap.release()
+        os.remove(video_path)  # Clean up the uploaded video file
 
 if __name__ == "__main__":
     main()
