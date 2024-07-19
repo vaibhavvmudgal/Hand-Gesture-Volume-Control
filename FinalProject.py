@@ -7,7 +7,6 @@ import streamlit as st
 import tempfile
 import time
 import yt_dlp as youtube_dl  # Updated library
-from moviepy.editor import VideoFileClip
 
 os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 
@@ -27,6 +26,8 @@ def download_youtube_video(url):
         with youtube_dl.YoutubeDL(ydl_opts) as ydl:
             info_dict = ydl.extract_info(url, download=True)
             video_file = ydl.prepare_filename(info_dict)
+            if not os.path.isfile(video_file):
+                raise FileNotFoundError("Downloaded video file not found.")
         return video_file
     except Exception as e:
         st.error(f"Failed to download video: {e}")
