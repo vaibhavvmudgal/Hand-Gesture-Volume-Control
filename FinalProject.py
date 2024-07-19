@@ -6,7 +6,7 @@ import math
 import tempfile
 import os
 import threading
-from queue import Queue  # Import the Queue class
+from queue import Queue
 
 # Function to process frames in a separate thread
 def process_frame_thread(frame_queue, result_queue, detector):
@@ -14,46 +14,53 @@ def process_frame_thread(frame_queue, result_queue, detector):
         frame = frame_queue.get()
         if frame is None:
             break
-        processed_frame = process_frame(frame, detector)
-        result_queue.put(processed_frame)
+        try:
+            processed_frame = process_frame(frame, detector)
+            result_queue.put(processed_frame)
+        except Exception as e:
+            st.error(f"Error processing frame: {e}")
 
 def process_frame(frame, detector):
     """Process a single frame for hand gestures."""
     if frame is None:
         return frame
 
-    # Convert to RGB for hand detection
-    rgb_frame = cv.cvtColor(frame, cv.COLOR_BGR2RGB)
-    
-    # Process the frame with hand detector
-    processed_frame = detector.findHands(rgb_frame)
-    lmList = detector.findPosition(rgb_frame, draw=False)
-
-    if lmList:
-        # Get coordinates of hand landmarks
-        x1, y1 = lmList[4][1], lmList[4][2]
-        x2, y2 = lmList[8][1], lmList[8][2]
-        cx, cy = (x1 + x2) // 2, (y1 + y2) // 2
-
-        # Draw landmarks and lines
-        cv.circle(frame, (x1, y1), 15, (255, 0, 255), cv.FILLED)
-        cv.circle(frame, (x2, y2), 15, (255, 0, 255), cv.FILLED)
-        cv.line(frame, (x1, y1), (x2, y2), (255, 0, 255), 3)
-
-        length = math.hypot(x2 - x1, y2 - y1)
-        vol = np.interp(length, [25, 200], [0, 100])
-        volBar = np.interp(length, [25, 200], [400, 150])
+    try:
+        # Convert to RGB for hand detection
+        rgb_frame = cv.cvtColor(frame, cv.COLOR_BGR2RGB)
         
-        if length <= 50:
-            cv.circle(frame, (cx, cy), 15, (0, 255, 0), cv.FILLED)
+        # Process the frame with hand detector
+        processed_frame = detector.findHands(rgb_frame)
+        lmList = detector.findPosition(rgb_frame, draw=False)
 
-        # Draw volume bar
-        cv.rectangle(frame, (50, 150), (85, 400), (0, 255, 0), 3)
-        cv.rectangle(frame, (50, int(volBar)), (85, 400), (0, 255, 0), cv.FILLED)
+        if lmList:
+            # Get coordinates of hand landmarks
+            x1, y1 = lmList[4][1], lmList[4][2]
+            x2, y2 = lmList[8][1], lmList[8][2]
+            cx, cy = (x1 + x2) // 2, (y1 + y2) // 2
 
-    # Convert to BGR for Streamlit
-    frame = cv.cvtColor(frame, cv.COLOR_RGB2BGR)
-    return frame
+            # Draw landmarks and lines
+            cv.circle(frame, (x1, y1), 15, (255, 0, 255), cv.FILLED)
+            cv.circle(frame, (x2, y2), 15, (255, 0, 255), cv.FILLED)
+            cv.line(frame, (x1, y1), (x2, y2), (255, 0, 255), 3)
+
+            length = math.hypot(x2 - x1, y2 - y1)
+            vol = np.interp(length, [25, 200], [0, 100])
+            volBar = np.interp(length, [25, 200], [400, 150])
+            
+            if length <= 50:
+                cv.circle(frame, (cx, cy), 15, (0, 255, 0), cv.FILLED)
+
+            # Draw volume bar
+            cv.rectangle(frame, (50, 150), (85, 400), (0, 255, 0), 3)
+            cv.rectangle(frame, (50, int(volBar)), (85, 400), (0, 255, 0), cv.FILLED)
+
+        # Convert to BGR for Streamlit
+        frame = cv.cvtColor(frame, cv.COLOR_RGB2BGR)
+        return frame
+    except Exception as e:
+        st.error(f"Error in process_frame: {e}")
+        return frame
 
 def main():
     st.title("Hand Gesture Volume Control")
@@ -114,4 +121,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-    
